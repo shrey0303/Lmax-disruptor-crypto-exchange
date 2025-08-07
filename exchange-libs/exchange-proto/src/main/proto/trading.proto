@@ -1,0 +1,196 @@
+syntax = "proto3";
+package shrey.bank.proto;
+
+option java_outer_classname = "TradingProto";
+
+// ==================== Enums ====================
+
+enum OrderSide {
+  BUY = 0;
+  SELL = 1;
+}
+
+enum OrderType {
+  LIMIT = 0;
+  MARKET = 1;
+}
+
+enum TimeInForce {
+  GTC = 0;  // Good Till Cancel
+  IOC = 1;  // Immediate Or Cancel
+  FOK = 2;  // Fill Or Kill
+}
+
+enum OrderStatus {
+  NEW = 0;
+  PARTIALLY_FILLED = 1;
+  FILLED = 2;
+  CANCELLED = 3;
+  REJECTED = 4;
+}
+
+// ==================== Commands ====================
+
+message PlaceOrderCommand {
+  string correlationId = 1;
+  uint64 accountId = 2;
+  string symbol = 3;
+  OrderSide side = 4;
+  OrderType orderType = 5;
+  uint64 price = 6;       // price in minor units (e.g. cents)
+  uint64 quantity = 7;     // quantity in minor units
+  TimeInForce timeInForce = 8;
+  uint64 timestampNanos = 9;
+}
+
+message CancelOrderCommand {
+  string correlationId = 1;
+  uint64 accountId = 2;
+  uint64 orderId = 3;
+  string symbol = 4;
+  uint64 timestampNanos = 5;
+}
+
+message CreateTradingAccountCommand {
+  string correlationId = 1;
+}
+
+message DepositAssetCommand {
+  string correlationId = 1;
+  uint64 accountId = 2;
+  string asset = 3;
+  uint64 amount = 4;
+}
+
+message WithdrawAssetCommand {
+  string correlationId = 1;
+  uint64 accountId = 2;
+  string asset = 3;
+  uint64 amount = 4;
+}
+
+// ==================== Trading Command Wrapper ====================
+
+message TradingCommand {
+  oneof type {
+    PlaceOrderCommand placeOrderCommand = 1;
+    CancelOrderCommand cancelOrderCommand = 2;
+    CreateTradingAccountCommand createTradingAccountCommand = 3;
+    DepositAssetCommand depositAssetCommand = 4;
+    WithdrawAssetCommand withdrawAssetCommand = 5;
+  }
+}
+
+// ==================== Command Log for Kafka Journaling ====================
+
+message TradingCommandLog {
+  oneof type {
+    PlaceOrderCommand placeOrderCommand = 1;
+    CancelOrderCommand cancelOrderCommand = 2;
+    CreateTradingAccountCommand createTradingAccountCommand = 3;
+    DepositAssetCommand depositAssetCommand = 4;
+    WithdrawAssetCommand withdrawAssetCommand = 5;
+  }
+}
+
+message TradingCommandLogs {
+  repeated TradingCommandLog logs = 1;
+}
+
+// ==================== Results ====================
+
+message TradingBaseResult {
+  uint32 code = 1;
+  string message = 2;
+  optional string correlationId = 3;
+}
+
+message TradeExecution {
+  uint64 tradeId = 1;
+  string symbol = 2;
+  uint64 buyOrderId = 3;
+  uint64 sellOrderId = 4;
+  uint64 price = 5;
+  uint64 quantity = 6;
+  uint64 buyAccountId = 7;
+  uint64 sellAccountId = 8;
+  uint64 timestampNanos = 9;
+}
+
+message OrderAck {
+  uint64 orderId = 1;
+  string symbol = 2;
+  OrderStatus status = 3;
+  uint64 filledQuantity = 4;
+  uint64 remainingQuantity = 5;
+  string correlationId = 6;
+  repeated TradeExecution trades = 7;
+}
+
+message TradingResponse {
+  oneof type {
+    OrderAck orderAck = 1;
+    TradingBaseResult baseResult = 2;
+  }
+}
+
+// ==================== Market Data ====================
+
+message PriceLevel {
+  uint64 price = 1;
+  uint64 quantity = 2;
+  uint32 orderCount = 3;
+}
+
+message OrderBookSnapshot {
+  string symbol = 1;
+  repeated PriceLevel bids = 2;
+  repeated PriceLevel asks = 3;
+  uint64 timestampNanos = 4;
+}
+
+message TickerData {
+  string symbol = 1;
+  uint64 lastPrice = 2;
+  uint64 volume24h = 3;
+  int64 priceChange24h = 4;
+  uint64 high24h = 5;
+  uint64 low24h = 6;
+  uint64 timestampNanos = 7;
+}
+
+message MarketDataQuery {
+  oneof type {
+    OrderBookQuery orderBookQuery = 1;
+    TickerQuery tickerQuery = 2;
+  }
+}
+
+message OrderBookQuery {
+  string symbol = 1;
+  uint32 depth = 2;
+  string correlationId = 3;
+}
+
+message TickerQuery {
+  string symbol = 1;
+  string correlationId = 2;
+}
+
+message MarketDataResult {
+  oneof type {
+    OrderBookSnapshot orderBookSnapshot = 1;
+    TickerData tickerData = 2;
+    TradingBaseResult baseResult = 3;
+  }
+}
+
+// ==================== gRPC Services ====================
+
+service TradingCommandService {
+  rpc sendCommand(stream TradingCommand) returns (stream TradingResponse);
+}
+
+service MarketDataService {
+  rpc subscribe(stream MarketDataQuery) returns (stream MarketDataResult);
+}
