@@ -1,0 +1,33 @@
+[versions]
+springBoot = "3.3.0"
+springDependencyManagement = "1.1.5"
+slf4jVersion = "2.0.13"
+logbackVersion = "1.5.6"
+kafkaClientVersion = "3.7.0"
+lmaxDisruptorVersion = "4.0.0"
+agronaVersion = "1.21.2"
+lombokVersion = "1.18.32"
+protobufJavaVersion = "4.27.1"
+grpcVersion = "1.64.0"
+protocVersion = "4.27.1"
+annotationsApiVersion = "6.0.53"
+protobufPluginVersion = "0.9.4"
+mysqlVersion = "8.4.0"
+jmhVersion = "1.37"
+micrometerVersion = "1.13.0"
+okHttpVersion = "4.12.0"
+jsonVersion = "20240303"
+[libraries]
+springBootStarter = { group = "org.springframework.boot", name = "spring-boot-starter" , version.ref = "springBoot"}
+slf4j = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4jVersion" }
+logback = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logbackVersion" }
+kafkaClient = { group = "org.apache.kafka", name = "kafka-clients", version.ref = "kafkaClientVersion" }
+lmaxDisruptor = { group = "com.lmax", name = "disruptor", version.ref = "lmaxDisruptorVersion" }
+agrona = { group = "org.agrona", name = "agrona", version.ref = "agronaVersion" }
+protobufJava = { group = "com.google.protobuf", name = "protobuf-java", version.ref = "protobufJavaVersion" }
+mysqlConnector = { group = "com.mysql", name = "mysql-connector-j", version.ref = "mysqlVersion" }
+jmhCore = { group = "org.openjdk.jmh", name = "jmh-core", version.ref = "jmhVersion" }
+jmhGeneratorAnnprocess = { group = "org.openjdk.jmh", name = "jmh-generator-annprocess", version.ref = "jmhVersion" }
+micrometer-registry-prometheus = { group = "io.micrometer", name = "micrometer-registry-prometheus", version.ref = "micrometerVersion" }
+okHttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okHttpVersion" }
+json = { group = "org.json", name = "json", version.ref = "jsonVersion" }
