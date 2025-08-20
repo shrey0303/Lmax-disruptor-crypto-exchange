@@ -45,7 +45,7 @@ graph TB
 
     subgraph "Infrastructure"
         K["Apache Kafka"]
-        M["MySQL"]
+        M["PostgreSQL"]
         P["Prometheus"]
         G["Grafana"]
     end
@@ -180,7 +180,7 @@ shaky-towers/
     benchmark-cluster/          # gRPC integration benchmark
     benchmark-cluster-jmh/      # JMH microbenchmark suite
   monitoring/                   # Prometheus scrape config, Grafana dashboard JSON
-  docker-infra.yml              # Kafka, Zookeeper, MySQL, Prometheus, Grafana
+  docker-infra.yml              # Kafka, Zookeeper, PostgreSQL, Prometheus, Grafana
 ```
 
 ---
@@ -190,7 +190,7 @@ shaky-towers/
 ### Prerequisites
 
 - Java 21+
-- Docker and Docker Compose (for Kafka, MySQL, Prometheus, Grafana)
+- Docker and Docker Compose (for Kafka, PostgreSQL, Prometheus, Grafana)
 
 ### Infrastructure
 
@@ -281,7 +281,7 @@ Exposes REST on port 8900.
 | Off-heap collections | Agrona `Long2ObjectHashMap` |
 | Latency measurement | HdrHistogram |
 | Metrics | Prometheus + Micrometer + Grafana |
-| Persistence | MySQL (snapshot recovery) |
+| Persistence | PostgreSQL (snapshot recovery) |
 | Microbenchmark | JMH (OpenJDK) |
 
 ---

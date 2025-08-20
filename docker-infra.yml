@@ -64,13 +64,15 @@ services:
     depends_on:
       - redpanda-0
   database:
-    image: mysql:8.0
+    image: postgres:16
     container_name: database
     restart: on-failure
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: p2pc
     ports:
-      - 3306:3306
+      - 5432:5432
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 

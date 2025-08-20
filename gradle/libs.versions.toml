@@ -12,7 +12,7 @@ grpcVersion = "1.64.0"
 protocVersion = "4.27.1"
 annotationsApiVersion = "6.0.53"
 protobufPluginVersion = "0.9.4"
-mysqlVersion = "8.4.0"
+postgresqlVersion = "42.7.3"
 jmhVersion = "1.37"
 micrometerVersion = "1.13.0"
 okHttpVersion = "4.12.0"
@@ -25,7 +25,7 @@ kafkaClient = { group = "org.apache.kafka", name = "kafka-clients", version.ref 
 lmaxDisruptor = { group = "com.lmax", name = "disruptor", version.ref = "lmaxDisruptorVersion" }
 agrona = { group = "org.agrona", name = "agrona", version.ref = "agronaVersion" }
 protobufJava = { group = "com.google.protobuf", name = "protobuf-java", version.ref = "protobufJavaVersion" }
-mysqlConnector = { group = "com.mysql", name = "mysql-connector-j", version.ref = "mysqlVersion" }
+postgresql = { group = "org.postgresql", name = "postgresql", version.ref = "postgresqlVersion" }
 jmhCore = { group = "org.openjdk.jmh", name = "jmh-core", version.ref = "jmhVersion" }
 jmhGeneratorAnnprocess = { group = "org.openjdk.jmh", name = "jmh-generator-annprocess", version.ref = "jmhVersion" }
 micrometer-registry-prometheus = { group = "io.micrometer", name = "micrometer-registry-prometheus", version.ref = "micrometerVersion" }

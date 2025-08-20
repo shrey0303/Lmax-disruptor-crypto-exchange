@@ -1,5 +1,5 @@
 ## v2.0.0 — Full Trading Platform
-- GC-free order book with intrusive linked-list price levels (Agrona `Long2ObjectHashMap`)
+- Allocation-light order book with intrusive linked-list price levels (Agrona `Long2ObjectHashMap`); no GC pauses observed during steady-state measurement (not fully zero-allocation — ~576 B/op)
 - Price-time priority matching engine (limit, market, partial fills)
 - 4-stage LMAX Disruptor pipeline: Risk Validation → Kafka Journaling → Matching → Settlement
 - Pre-trade risk management with position limits and circuit breaker
@@ -9,7 +9,7 @@
 - Event replay system (rebuild order book from Kafka)
 - Prometheus metrics + Grafana dashboard
 - Load simulator for stress testing
-- JMH benchmark suite: **3,943,456 ops/sec** matching throughput
+- JMH benchmark suite: **1,700,276 ops/sec** (each op = one aggressive match + one replenishment, i.e. ~3.4M `processOrder` calls/sec); full pipeline sustains ~407K ops/sec steady-state under Binance replay
 - Live dark-mode trading dashboard (HTML)
 - Market data gRPC streaming service
 
@@ -17,5 +17,5 @@
 - Core LMAX Disruptor architecture
 - gRPC transport layer
 - Kafka event sourcing
-- MySQL snapshot persistence
+- PostgreSQL snapshot persistence
 - Leader/Follower/Learner cluster topology

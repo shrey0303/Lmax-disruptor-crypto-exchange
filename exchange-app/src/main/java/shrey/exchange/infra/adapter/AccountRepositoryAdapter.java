@@ -90,7 +90,7 @@ public class AccountRepositoryAdapter implements AccountRepository {
 
         if (!walletValues.isEmpty()) {
             entityManager.createNativeQuery("INSERT INTO temp_wallets VALUES " + walletValues + ";").executeUpdate();
-            entityManager.createNativeQuery("INSERT IGNORE INTO trading_wallets (id) SELECT id FROM temp_wallets;").executeUpdate();
+            entityManager.createNativeQuery("INSERT INTO trading_wallets (id) SELECT id FROM temp_wallets ON CONFLICT (id) DO NOTHING;").executeUpdate();
         }
 
         if (!balanceValues.isEmpty()) {
@@ -98,7 +98,7 @@ public class AccountRepositoryAdapter implements AccountRepository {
             entityManager.createNativeQuery("INSERT INTO temp_balances VALUES " + balanceValues + ";").executeUpdate();
             entityManager.createNativeQuery("DELETE FROM trading_wallet_balances WHERE wallet_id IN (SELECT id FROM temp_wallets);").executeUpdate();
             entityManager.createNativeQuery("INSERT INTO trading_wallet_balances SELECT * FROM temp_balances;").executeUpdate();
-            entityManager.createNativeQuery("DROP TEMPORARY TABLE temp_balances;").executeUpdate();
+            entityManager.createNativeQuery("DROP TABLE temp_balances;").executeUpdate();
         } else if (!walletValues.isEmpty()) {
              entityManager.createNativeQuery("DELETE FROM trading_wallet_balances WHERE wallet_id IN (SELECT id FROM temp_wallets);").executeUpdate();
         }
@@ -108,12 +108,12 @@ public class AccountRepositoryAdapter implements AccountRepository {
             entityManager.createNativeQuery("INSERT INTO temp_holds VALUES " + holdValues + ";").executeUpdate();
             entityManager.createNativeQuery("DELETE FROM trading_wallet_holds WHERE wallet_id IN (SELECT id FROM temp_wallets);").executeUpdate();
             entityManager.createNativeQuery("INSERT INTO trading_wallet_holds SELECT * FROM temp_holds;").executeUpdate();
-            entityManager.createNativeQuery("DROP TEMPORARY TABLE temp_holds;").executeUpdate();
+            entityManager.createNativeQuery("DROP TABLE temp_holds;").executeUpdate();
         } else if (!walletValues.isEmpty()) {
             entityManager.createNativeQuery("DELETE FROM trading_wallet_holds WHERE wallet_id IN (SELECT id FROM temp_wallets);").executeUpdate();
         }
 
-        entityManager.createNativeQuery("DROP TEMPORARY TABLE temp_wallets;").executeUpdate();
+        entityManager.createNativeQuery("DROP TABLE temp_wallets;").executeUpdate();
     }
 
     @Override
