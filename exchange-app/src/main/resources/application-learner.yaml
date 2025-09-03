@@ -1,0 +1,18 @@
+spring.application.name: learner-node
+server.port: 8810
+---
+cluster:
+  kafka:
+    groupId: command-log-learner-group
+
+spring.datasource:
+  username: root
+  password: root
+
+---
+learner:
+  bufferSize: 1024
+  pollInterval: 100
+  maxSnapshotCheckCircles: 50
+  snapshotFragmentSize: 100000
+  snapshotLifeTime: 20
