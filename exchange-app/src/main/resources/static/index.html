@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LMAX Disruptor Crypto Exchange</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --panel-bg: #151a23;
+            --border-color: #2b3139;
+            --text-primary: #eaecef;
+            --text-secondary: #848e9c;
+            --buy-color: #0ecb81;
+            --buy-bg: rgba(14, 203, 129, 0.1);
+            --sell-color: #f6465d;
+            --sell-bg: rgba(246, 70, 93, 0.1);
+            --accent-color: #fcd535;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background-color: #12161c;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .ticker-bar {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .ticker-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .ticker-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .ticker-value {
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .ticker-price {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--buy-color);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 3fr 1fr;
+            grid-template-rows: 1fr;
+            gap: 1px;
+            background-color: var(--border-color);
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .panel {
+            background-color: var(--panel-bg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        /* Order Book Styles */
+        .orderbook-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            padding: 0.25rem 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .orderbook-row:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .depth-bar {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 0;
+            opacity: 0.15;
+        }
+
+        .ask-row .depth-bar {
+            background-color: var(--sell-color);
+        }
+
+        .bid-row .depth-bar {
+            background-color: var(--buy-color);
+        }
+
+        .col-price { text-align: left; z-index: 1; }
+        .col-qty { text-align: right; z-index: 1; }
+        .col-total { text-align: right; z-index: 1; color: var(--text-secondary); }
+
+        .ask-price { color: var(--sell-color); }
+        .bid-price { color: var(--buy-color); }
+
+        .spread-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            margin: 0.5rem 0;
+        }
+
+        .spread-price {
+            font-size: 1.25rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--buy-color);
+        }
+
+        /* Chart Area Placeholder */
+        .chart-placeholder {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: var(--text-secondary);
+        }
+        
+        /* Stats & Controls Panel */
+        .controls-panel {
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .stat-box {
+            background: #1e232d;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-color);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .stat-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: baseline;
+            gap: 0.25rem;
+        }
+        
+        .stat-unit {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: #000;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            width: 100%;
+            font-family: 'Inter', sans-serif;
+            text-transform: uppercase;
+        }
+        
+        .btn-stop {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Animation for value updates */
+        @keyframes flash-green { 0% { background-color: rgba(14,203,129,0.5); } 100% { background-color: transparent; } }
+        @keyframes flash-red { 0% { background-color: rgba(246,70,93,0.5); } 100% { background-color: transparent; } }
+
+        .update-up { animation: flash-green 0.5s ease-out; }
+        .update-down { animation: flash-red 0.5s ease-out; }
+
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            LMAX CRYPTO
+        </div>
+        <div class="ticker-bar">
+            <div class="ticker-item">
+                <span class="ticker-label">BTC/USDT</span>
+                <span class="ticker-price" id="hdr-price">50,000.00</span>
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-label">24h Change</span>
+                <span class="ticker-value" style="color: var(--buy-color);">+2.45%</span>
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-label">Pipeline Status</span>
+                <span class="ticker-value" style="color: var(--accent-color);">ACTIVE</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-content">
+        <!-- Order Book Left Panel -->
+        <div class="panel">
+            <div class="panel-header">Order Book</div>
+            <div class="panel-content" style="display: flex; flex-direction: column;">
+                <div class="orderbook-row" style="color: var(--text-secondary); border-bottom: 1px solid var(--border-color); margin-bottom: 4px;">
+                    <div class="col-price">Price(USDT)</div>
+                    <div class="col-qty">Size(BTC)</div>
+                    <div class="col-total">Total</div>
+                </div>
+                
+                <div id="asks-container" style="display: flex; flex-direction: column-reverse; justify-content: flex-end; flex: 1;">
+                    <!-- Asks injected here max 15 -->
+                </div>
+                
+                <div class="spread-container">
+                    <span class="spread-price" id="spread-price">50,000.00</span>
+                    <span style="font-size:0.75rem; color: var(--text-secondary); margin-left:10px;">Spread: <span id="spread-value">0.0</span></span>
+                </div>
+                
+                <div id="bids-container" style="display: flex; flex-direction: column; flex: 1;">
+                    <!-- Bids injected here max 15 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Chart Placeholder -->
+        <div class="panel">
+            <div class="panel-header">Sub-Microsecond Matching Engine</div>
+            <div class="panel-content chart-placeholder">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--border-color)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 1rem;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                <h3 style="color: var(--text-primary); margin: 0 0 0.5rem 0;">LMAX Disruptor Architecture</h3>
+                <p style="text-align: center; max-width: 400px; line-height: 1.5;">This exchange uses a 4-stage mechanical sympathy pipeline (Risk -> Journal -> Match -> Settle) backed by GC-free Intrusive Linked Lists.</p>
+                <div style="display:flex; gap: 2rem; margin-top: 2rem;">
+                    <div style="text-align:center;">
+                        <div style="font-size:2rem; font-weight: 700; color: var(--buy-color); font-family: 'JetBrains Mono', monospace;">0</div>
+                        <div style="font-size:0.75rem; color: var(--text-secondary); text-transform: uppercase;">GC Pauses</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:2rem; font-weight: 700; color: var(--accent-color); font-family: 'JetBrains Mono', monospace;" id="sys-p50">0</div>
+                        <div style="font-size:0.75rem; color: var(--text-secondary); text-transform: uppercase;">P50 Latency (μs)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side Controls & Latency -->
+        <div class="panel">
+            <div class="panel-header">System Diagnostics</div>
+            <div class="controls-panel">
+                <div class="stat-box">
+                    <span class="stat-title">Matching Engine P99 Latency</span>
+                    <div class="stat-value" id="val-p99">0.0 <span class="stat-unit">μs</span></div>
+                </div>
+                
+                <div class="stat-box">
+                    <span class="stat-title">Matching Engine P99.9 Latency</span>
+                    <div class="stat-value" id="val-max">0.0 <span class="stat-unit">μs</span></div>
+                </div>
+
+                <div class="stat-box">
+                    <span class="stat-title">Load Simulator</span>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">Generates realistic trading flow via gRPC directly into the disruptor ring buffer.</p>
+                    <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                        <button class="btn" onclick="startLoad()">Start 1k TPS</button>
+                        <button class="btn btn-stop" onclick="stopLoad()">Stop</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mock data generator for OrderBook when disconnected
+        function generateBookRows(startPrice, isAsk) {
+            let html = '';
+            let total = 0;
+            let currentPrice = startPrice;
+            for(let i=0; i<15; i++) {
+                currentPrice = isAsk ? currentPrice + (Math.random()*2) : currentPrice - (Math.random()*2);
+                let qty = (Math.random() * 5).toFixed(3);
+                total += parseFloat(qty);
+                let width = Math.min((total / 50) * 100, 100);
+                
+                html += `
+                <div class="orderbook-row ${isAsk ? 'ask-row' : 'bid-row'}">
+                    <div class="depth-bar" style="width: ${width}%"></div>
+                    <div class="col-price ${isAsk ? 'ask-price' : 'bid-price'}">${currentPrice.toFixed(2)}</div>
+                    <div class="col-qty">${qty}</div>
+                    <div class="col-total">${total.toFixed(3)}</div>
+                </div>`;
+            }
+            return html;
+        }
+
+        // Initialize empty state
+        document.getElementById('asks-container').innerHTML = generateBookRows(50000, true);
+        document.getElementById('bids-container').innerHTML = generateBookRows(50000, false);
+
+        // WebSockets
+        try {
+            const marketWs = new WebSocket(`ws://${window.location.host}/ws/marketdata`);
+            const latencyWs = new WebSocket(`ws://${window.location.host}/ws/latency`);
+
+            marketWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.symbol === 'BTC_USDT') {
+                    // Flash update price
+                    const priceEl = document.getElementById('hdr-price');
+                    const oldPrice = parseFloat(priceEl.innerText.replace(',',''));
+                    const newPrice = data.bestBid;
+                    
+                    priceEl.innerText = newPrice.toLocaleString(undefined, {minimumFractionDigits: 2});
+                    document.getElementById('spread-price').innerText = newPrice.toLocaleString(undefined, {minimumFractionDigits: 2});
+                    document.getElementById('spread-value').innerText = (data.bestAsk - data.bestBid).toFixed(2);
+                    
+                    if (newPrice > oldPrice) {
+                        priceEl.classList.remove('update-down');
+                        priceEl.classList.add('update-up');
+                    } else if (newPrice < oldPrice) {
+                        priceEl.classList.remove('update-up');
+                        priceEl.classList.add('update-down');
+                    }
+                    
+                    // Trigger reflow
+                    void priceEl.offsetWidth;
+                    
+                    // Update dummy book levels based on real best bid/ask
+                    document.getElementById('asks-container').innerHTML = generateBookRows(data.bestAsk, true);
+                    document.getElementById('bids-container').innerHTML = generateBookRows(data.bestBid, false);
+                }
+            };
+
+            latencyWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.match) {
+                    document.getElementById('sys-p50').innerText = data.match.p50.toFixed(3);
+                    document.getElementById('val-p99').innerHTML = `${data.match.p99.toFixed(3)} <span class="stat-unit">μs</span>`;
+                    document.getElementById('val-max').innerHTML = `${data.match.p999.toFixed(3)} <span class="stat-unit">μs</span>`;
+                }
+            };
+        } catch (e) {
+            console.log('WebSockets not available, using mock data mode');
+        }
+
+        // Load testing controls
+        async function startLoad() {
+            try {
+                const response = await fetch('/api/v1/loadtest/start?ordersPerSecond=1000', { method: 'POST' });
+                const text = await response.text();
+                console.log(text);
+            } catch (e) {
+                console.error("Failed to start load", e);
+            }
+        }
+
+        async function stopLoad() {
+            try {
+                const response = await fetch('/api/v1/loadtest/stop', { method: 'POST' });
+                const text = await response.text();
+                console.log(text);
+            } catch (e) {
+                console.error("Failed to stop load", e);
+            }
+        }
+    </script>
+</body>
+</html>
