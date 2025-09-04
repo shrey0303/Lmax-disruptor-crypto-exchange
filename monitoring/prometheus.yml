@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: 'admin-app'
+    static_configs:
+      - targets: ['host.docker.internal:8901']
+    metrics_path: '/actuator/prometheus'
+  - job_name: 'exchange-app'
+    static_configs:
+      - targets: ['host.docker.internal:8800']
+    metrics_path: '/actuator/prometheus'
