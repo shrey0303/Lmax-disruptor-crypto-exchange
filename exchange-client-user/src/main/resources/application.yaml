@@ -1,0 +1,4 @@
+spring.application.name: exchange-user
+server.port: 8950
+---
+spring.threads.virtual.enabled: true
