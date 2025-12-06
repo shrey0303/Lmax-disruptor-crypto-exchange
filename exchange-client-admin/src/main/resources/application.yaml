@@ -1,0 +1,30 @@
+spring.application.name: exchange-admin
+server.port: 8900
+---
+spring.threads.virtual.enabled: true
+---
+request.timeout.milliseconds: 1000
+---
+cluster:
+  leader:
+    host: localhost
+    port: 9500
+
+request-buffer:
+  pow: 16
+
+# Actuator / Metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,prometheus"
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  server:
+    port: 8901
