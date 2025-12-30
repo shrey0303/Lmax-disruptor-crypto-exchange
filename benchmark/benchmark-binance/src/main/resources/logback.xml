@@ -1,0 +1,26 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Benchmark classes: show all info -->
+    <logger name="shrey.benchmarkbinance" level="INFO"/>
+    
+    <!-- Exchange core pipeline: suppress expected errors during benchmark.
+         Settlement hold mismatches and cancel-not-found are expected when 
+         pipeline stages run concurrently on different Disruptor threads.
+         These are caught by try/catch and don't crash the pipeline. -->
+    <logger name="shrey.exchange.SettlementHandler" level="OFF"/>
+    <logger name="shrey.exchange.RiskValidationHandler" level="OFF"/>
+    <logger name="shrey.exchange.MatchingHandler" level="OFF"/>
+    
+    <!-- Suppress verbose library logs -->
+    <logger name="okhttp3" level="WARN"/>
+    <logger name="com.lmax.disruptor" level="WARN"/>
+
+    <root level="WARN">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

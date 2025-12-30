@@ -1,0 +1,13 @@
+{
+  "mode": "replay",
+  "pipeline": "Risk→NoopJournal→Match→Settle→Metrics",
+  "elapsedHours": "0.17",
+  "droppedEvents": 0,
+  "sourceEvents": 82667,
+  "totalEvents": 26362909,
+  "throughputOpsPerSec": 43937,
+  "dataSource": "Real Binance depth events (captured offline, looped)",
+  "elapsedSeconds": 600,
+  "totalPasses": 319,
+  "checkpointTime": "2026-04-05 23:56:50"
+}

@@ -1,0 +1,64 @@
+{
+  "totalPlaces": 93636633,
+  "droppedEvents": 0,
+  "rejections": 84358933,
+  "matchRatePercent": 0.06597417914418174,
+  "durationSeconds": 182.364,
+  "totalEvents": 125322426,
+  "dropRatePercent": 0,
+  "throughputOpsPerSec": 687210.337566625,
+  "totalTrades": 61776,
+  "riskLatency": {
+    "p99_us": 86507.519,
+    "note": "post-warmup only (first 30s excluded)",
+    "p50_us": 27131.903,
+    "p9999_us": 126353.407,
+    "max_us": 156237.823,
+    "p999_us": 104857.599,
+    "count": 118448133,
+    "p95_us": 69206.015
+  },
+  "parseErrors": 0,
+  "matchLatency": {
+    "p99_us": 78643.199,
+    "note": "post-warmup only (first 30s excluded)",
+    "p50_us": 19791.871,
+    "p9999_us": 1149239.295,
+    "max_us": 1157627.903,
+    "p999_us": 729808.895,
+    "count": 68663921,
+    "p95_us": 56360.959
+  },
+  "mode": "replay",
+  "burstMetrics": {
+    "throughputOpsPerSec": 687232.6472658807,
+    "durationSec": 182.3580799,
+    "events": 125322426
+  },
+  "settleLatency": {
+    "p99_us": 31326.207,
+    "note": "post-warmup only (first 30s excluded)",
+    "p50_us": 9175.039,
+    "p9999_us": 1082130.431,
+    "max_us": 1149239.295,
+    "p999_us": 139460.607,
+    "count": 68663921,
+    "p95_us": 21102.591
+  },
+  "totalCancels": 31685793,
+  "e2eLatency": {
+    "p99_us": 158334.975,
+    "note": "post-warmup only (first 30s excluded)",
+    "p50_us": 65011.711,
+    "p9999_us": 1199570.943,
+    "max_us": 1207959.551,
+    "p999_us": 1166016.511,
+    "count": 118448133,
+    "p95_us": 126877.695
+  },
+  "warmupEvents": 6874294,
+  "postWarmupEvents": 118448132,
+  "warmupSeconds": 5,
+  "dataSource": "Binance WebSocket BTC_USDT + ETH_USDT depth@100ms",
+  "postWarmupThroughputOpsPerSec": 667825.105432895
+}
