@@ -1,6 +1,6 @@
 # LMAX Disruptor Cryptocurrency Order Matching Engine
 
-A lock-free, single-writer cryptocurrency order matching engine built on the LMAX Disruptor mechanical sympathy pattern, achieving 963K sustained ops/sec through a 4-stage ring buffer pipeline (Risk Validation, Kafka Journaling, Price-Time Priority Matching, Settlement) with 12.9 us median matching latency on a 200K-deep order book. The architecture enforces zero-GC steady-state execution via Agrona off-heap collections and intrusive linked-list price levels, eliminating stop-the-world pauses from the hot path entirely.
+A lock-free, single-writer cryptocurrency order matching engine built on the LMAX Disruptor mechanical sympathy pattern, achieving 687K sustained ops/sec through a 4-stage ring buffer pipeline (Risk Validation, Kafka Journaling, Price-Time Priority Matching, Settlement) with ~1 µs median (p50) matching latency on a 300K-deep order book. The architecture enforces zero-GC steady-state execution via Agrona off-heap collections and intrusive linked-list price levels, eliminating stop-the-world pauses from the hot path entirely.
 
 ---
 
@@ -147,13 +147,13 @@ Extended saturation run establishing defensible throughput bounds over a sustain
 
 Note: The 10-minute numbers above are extrapolated from the verified 3-minute run. The 3-minute run showed stable convergence (407K ops/sec at pass 800+), indicating the throughput is in steady state. A full 10-minute re-run has not been performed with the current FIFO cancel fix and verified account IDs.
 
-E2E queueing latency of ~420ms at p99 is ring buffer residence time under intentional saturation — the producer blocks on `ringBuffer.next()` when the buffer is full, ensuring zero data loss. Under non-saturated load, matching core latency is sub-microsecond (see JMH results above).
+E2E queueing latency of ~158ms at p99 is ring buffer residence time under intentional saturation — the producer blocks on `ringBuffer.next()` when the buffer is full, ensuring zero data loss. Under non-saturated load, matching core latency is sub-microsecond (see JMH results above).
 
 ---
 
 ## Architectural Trade-offs and Limitations
 
-**Ring buffer saturation and E2E latency.** The 419ms E2E p99 latency is a direct consequence of intentional ring buffer saturation. The replay benchmark feeds events via `ringBuffer.next()` (blocking), which causes the producer to stall when the buffer is full. The resulting queueing delay accumulates in the `RingBuffer` itself — not in the handlers. This is a deliberate design choice: the system queues rather than drops under extreme backpressure, ensuring zero data loss. Under non-saturated production load, the matching engine processes individual orders in sub-microsecond time (see JMH results).
+**Ring buffer saturation and E2E latency.** The 158.3ms E2E p99 latency is a direct consequence of intentional ring buffer saturation. The replay benchmark feeds events via `ringBuffer.next()` (blocking), which causes the producer to stall when the buffer is full. The resulting queueing delay accumulates in the `RingBuffer` itself — not in the handlers. This is a deliberate design choice: the system queues rather than drops under extreme backpressure, ensuring zero data loss. Under non-saturated production load, the matching engine processes individual orders in sub-microsecond time (see JMH results).
 
 **Single-writer bottleneck.** The single-writer principle guarantees cache-line isolation and eliminates false sharing, but pipeline throughput is bounded by the slowest handler stage. Under the current risk validation logic (with background balance replenishment every 10 seconds), the system saturates at approximately 407K ops/sec. Horizontal scaling via partitioned order books on separate Disruptor instances would be the path to higher aggregate throughput.
 
