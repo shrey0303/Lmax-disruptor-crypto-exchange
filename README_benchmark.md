@@ -4,7 +4,23 @@ Machine-readable telemetry: [`docs/benchmark/benchmark-results.json`](docs/bench
 
 ---
 
-measures `OrderBookManager.processOrder()` in isolation. No Disruptor ring buffer, no Kafka, no gRPC, no risk validation, no settlement. Seeds a 300,000-order deep book (3 symbols, 50K bids and 50K asks each). To force absolute worst-case latency and break cache locality, prices are completely randomized across a 10,000-level spread, resulting in a fractured intrusive-list block. It continuously routes aggressive limit orders parameterized to sweep heavy chunks of these sparse levels. Order quantities follow a Gaussian distribution (mean 50, std 30) clamped at 1-500.
+## Environment
+
+| Property | Value |
+|---|---|
+| CPU | 12 logical cores |
+| OS | Windows 11 |
+| JDK | OpenJDK 21.0.10+8-LTS (HotSpot 64-Bit Server VM) |
+| JMH (§1) | JVM defaults — Java 21 **G1GC**, no heap/GC override |
+| Binance replay (§2) | `-Xms4g -Xmx8g -XX:+UseZGC -XX:+AlwaysPreTouch` |
+
+CPU model and total RAM were not captured in the run telemetry.
+
+---
+
+## 1. Matching Core Isolated (JMH)
+
+Measures `OrderBookManager.processOrder()` in isolation. No Disruptor ring buffer, no Kafka, no gRPC, no risk validation, no settlement. Seeds a 300,000-order deep book (3 symbols, 50K bids and 50K asks each). To force absolute worst-case latency and break cache locality, prices are completely randomized across a 10,000-level spread, resulting in a fragmented memory layout across price levels. Each measured operation is two `processOrder` calls: one aggressive (marketable) limit order that sweeps ~2–3 resting price levels, followed by one limit-order replenishment. Aggressor and replenishment quantities follow a Gaussian distribution (mean 50, std 30) clamped at 1-500.
 
 ### Configuration
 
@@ -34,21 +50,23 @@ MatchingEngineBenchmark.benchmarkMatching:benchmarkMatching·p1.00    sample    
 | Metric | Value |
 |---|---|
 | Throughput | 1,700,276 ± 112,884 ops/sec (Cnt=20) |
-| Order book depth | 3 symbols, 300,000 resting orders total |
+| Order book depth | 3 symbols × (50K bids + 50K asks) = 300K resting orders |
 | Cache topology | Deeply fragmented (10,000 randomized prices) |
 | Avg Latency (p50) | ~1 µs |
 | Tail Latency (p99) | ~1 µs |
 | Tail Latency (p99.9) | ~10 µs |
 | Tail Latency (p99.99) | ~100 µs |
-| Max observed (p100) | 27 ms |
-| Operation | 1 sweeping aggressive match + 1 limit order replenish |
-| GC pauses during measurement | 0 |
+| Max observed (p100) | 27 ms (lone JIT/safepoint or G1 young-gen outlier) |
+| Operation | 1 aggressive (marketable) limit order sweeping ~2–3 levels + 1 limit replenish |
+| GC impact | No collection pauses visible through p99.9 (~10 µs); ~576 B/op (`-prof gc`), all young-gen |
+
+JMH `SampleTime` reports order-of-magnitude buckets, so p50–p99 read identically (~1 µs) at this resolution. Forks run on JVM defaults (Java 21 → **G1GC**); ~576 B/op at 1.7M ops/sec is ~980 MB/s of young-gen churn that never surfaces as tail latency.
 
 ---
 
-## 2. Full Pipeline Replay -- 3 Minutes (Binance BTC/USDT)
+## 2. Full Pipeline Replay -- 3 Minutes (Binance BTC/USDT + ETH/USDT)
 
-4-stage LMAX Disruptor pipeline: Risk Validation, Noop Journaling, Matching, Settlement. Input is captured Binance BTC/USDT WebSocket depth data replayed at maximum producer throughput.
+4-stage LMAX Disruptor pipeline: Risk Validation, Noop Journaling, Matching, Settlement. Input is captured Binance BTC/USDT + ETH/USDT WebSocket depth data replayed at maximum producer throughput. Kafka journaling is disabled (`NoopJournaler`); enabling it bounds throughput by the synchronous `send().get()` round-trip.
 
 ### Results
 
@@ -56,7 +74,7 @@ MatchingEngineBenchmark.benchmarkMatching:benchmarkMatching·p1.00    sample    
 |---|---|
 | Duration | 3 minutes (182.4s) |
 | Total events | 125,322,426 |
-| Throughput | 687,210 ops/sec |
+| Average throughput | 687,210 ops/sec |
 | Post-warmup throughput | 667,825 ops/sec |
 | Total places / cancels | 93,636,633 / 31,685,793 |
 | Total trades | 61,776 |
@@ -64,52 +82,23 @@ MatchingEngineBenchmark.benchmarkMatching:benchmarkMatching·p1.00    sample    
 | Matching stage p99 | 78.6 ms |
 | Settlement stage p50 | 9.2 ms |
 | Settlement stage p99 | 31.3 ms |
+| Risk stage p50 | 27.1 ms |
 | Risk stage p99 | 86.5 ms |
-| E2E queueing p50 | 65.0 ms |
-| E2E queueing p99 | 158.3 ms |
-| E2E queueing p99.9 | 1,166 ms |
-| Blocked events | 0 |
+| Ring buffer residence (E2E) p50 | 65.0 ms |
+| Ring buffer residence (E2E) p99 | 158.3 ms |
+| Ring buffer residence (E2E) p99.9 | 1,166 ms |
+| Dropped events | 0 |
 | Parse errors | 0 |
-| Order rejection rate | 67.31% |
-| Match rate | 0.07% |
+| Order rejection rate | 67.31% (84.36M ÷ 125.32M total events) |
+| Match rate | 0.07% (61,776 trades ÷ 93.64M placements) |
 
-Note: ~67% of events are risk-rejected due to balance depletion under sustained stress. The 687K ops/sec figure is pipeline throughput. Of events passing risk validation (~33%), most rest in the book without crossing the spread, resulting in the 0.07% match rate.
+Note: 67.31% of all replayed events (84.36M ÷ 125.32M, places + cancels) are risk-rejected due to balance depletion under sustained stress. The 687K ops/sec figure is pipeline throughput. Of events passing risk validation (~33%), most rest in the book without crossing the spread — the 0.07% match rate is trades ÷ placements (61,776 ÷ 93.64M). Post-warmup throughput (667,825) is *lower* than the average (687,210) because the first ~5 s ran against a shallow book with undepleted balances at ~1.37M ops/sec, lifting the average.
 
-Per-handler latencies (Risk: 87ms p99, Match: 79ms p99, Settle: 31ms p99) represent computational cost inclusive of ring buffer queueing delay accumulated at each stage under saturation. Under normal operation, matching core latency is sub-microsecond (see JMH).
-
----
-
-## 3. Full Pipeline Replay -- 10 Minutes (Binance BTC/USDT + ETH/USDT)
-
-Extended saturation test establishing defensible throughput bounds. Input includes both BTC/USDT and ETH/USDT depth event streams from Binance WebSocket capture.
-
-### Results
-
-```
-=========================================
-  Duration:          3.0 minutes (182.4s)
-  Events Ingested:   125,322,426
-  Avg Throughput:    687,210 ops/sec
-  Rejection rate:    67.31%
-  Match rate:        0.07%
-  Blocked events:    0
-=========================================
-Latency (post-warmup):
-  E2E Queueing p50:  65.0 ms
-  E2E Queueing p99:  158.3 ms
-  E2E Queueing p99.9: 1,166.0 ms
-  Risk p99:          86.5 ms
-  Match p99:         78.6 ms
-  Settle p99:        31.3 ms
-```
-
-Note: The 10-minute extended run has not yet been re-run with the corrected settlement logic, overflow protection, and thread-safety fixes. The 3-minute steady-state convergence at ~687K ops/sec indicates the throughput is stable and would hold over longer durations.
-
-E2E queueing latency reflects ring buffer residence time under intentional saturation. The producer blocks on `ringBuffer.next()` when the buffer is full, ensuring zero data loss. Under non-saturated load, matching core latency is sub-microsecond (see JMH).
+Per-handler latencies (Risk 87 ms p99, Match 79 ms p99, Settle 31 ms p99) are computational cost inclusive of ring buffer queueing delay accumulated at each stage under saturation. Percentiles are **not additive** — the p99 of end-to-end residence (158 ms) is not the sum of the per-stage p99s (196 ms); the 1,166 ms p99.9 is the rare deep-queue tail. Under normal operation, matching core latency is sub-microsecond (see JMH).
 
 ---
 
-## 4. Reproducing Benchmarks
+## 3. Reproducing Benchmarks
 
 ### JMH
 

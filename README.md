@@ -1,6 +1,6 @@
 # LMAX Disruptor Cryptocurrency Order Matching Engine
 
-A lock-free, single-writer cryptocurrency order matching engine built on the LMAX Disruptor mechanical sympathy pattern, achieving 687K sustained ops/sec through a 4-stage ring buffer pipeline (Risk Validation, Kafka Journaling, Price-Time Priority Matching, Settlement) with ~1 µs median (p50) matching latency on a 300K-deep order book. The architecture enforces zero-GC steady-state execution via Agrona off-heap collections and intrusive linked-list price levels, eliminating stop-the-world pauses from the hot path entirely.
+A single-writer, allocation-lean cryptocurrency order matching engine built on the LMAX Disruptor mechanical sympathy pattern. A 3-minute Binance BTC/USDT + ETH/USDT replay averages **~687K events/sec** (667K post-warmup) through a 4-stage ring buffer pipeline (Risk Validation, Kafka Journaling, Price-Time Priority Matching, Settlement), while the isolated matching core sustains ~1 µs median (p50) latency on a 300K-deep order book. Benchmarks run with a `NoopJournaler` — enabling Kafka journaling instead bounds throughput by the synchronous `send().get()` round-trip (network + disk), a separate limit. The architecture minimizes hot-path allocation via Agrona primitive-keyed (boxing-free, on-heap) collections and intrusive linked-list price levels; the ~576 B/op that remains is short-lived and young-gen only, so no collection pauses were visible in the JMH latency distribution through p99.9 (~10 µs).
 
 ---
 
@@ -38,7 +38,7 @@ graph TB
     end
 
     subgraph "Domain"
-        OB["GC-Free Order Book\n(Intrusive Linked Lists)"]
+        OB["Order Book\n(Intrusive Linked Lists)"]
         TW["Trading Wallets\n(Hold/Release/Settle)"]
         RE["Risk Engine\n(Circuit Breaker)"]
     end
@@ -64,22 +64,36 @@ graph TB
 
 ---
 
+## Benchmark Environment
+
+| Property | Value |
+|---|---|
+| CPU | 12 logical cores |
+| OS | Windows 11 |
+| JDK | OpenJDK 21.0.10+8-LTS (HotSpot 64-Bit Server VM) |
+| JMH micro-benchmark | JVM defaults — Java 21 **G1GC**, no heap/GC override |
+| Binance replay | `-Xms4g -Xmx8g -XX:+UseZGC -XX:+AlwaysPreTouch` |
+
+CPU model and total RAM were not captured in the run telemetry; the values above are those recorded in [`docs/benchmark/benchmark-results.json`](docs/benchmark/benchmark-results.json).
+
+---
+
 ## Micro-Benchmark: Hot-Path Telemetry (JMH)
 
-Isolated measurement of `OrderBookManager.processOrder()` -- no Disruptor, no Kafka, no gRPC, no risk validation, no settlement. Each operation consists of one aggressive market order match against resting liquidity followed by one limit order replenishment to maintain book depth.
+Isolated measurement of `OrderBookManager.processOrder()` -- no Disruptor, no Kafka, no gRPC, no risk validation, no settlement. Each operation is two `processOrder` calls: one aggressive (marketable) limit order that sweeps ~2–3 resting price levels, followed by one limit-order replenishment to maintain book depth. At 1.7M ops/sec that is ~3.4M `processOrder` calls/sec.
 
 | Metric | Value |
 |---|---|
 | Throughput | 1,700,276 ± 112,884 ops/sec (single-threaded) |
-| Order book depth | 3 symbols, 100K orders each (300K total) |
+| Order book depth | 3 symbols × (50K bids + 50K asks) = 300K resting orders |
 | Cache topology | Fully fragmented (prices randomized across 10,000-deep spread) |
 | Avg Latency (p50) | ~1 µs |
 | Tail Latency (p99) | ~1 µs |
 | Tail Latency (p99.9) | ~10 µs |
 | Tail Latency (p99.99) | ~100 µs |
 | Tail Latency (p99.999) | ~1 ms |
-| Max observed | 27 ms |
-| GC pauses | Zero during steady-state measurement |
+| Max observed (p100) | 27 ms |
+| GC impact | No collection pauses visible through p99.9 (~10 µs); ~576 B/op (`-prof gc`), all young-gen |
 
 ```text
 Benchmark                                                              Mode      Cnt        Score        Error  Units
@@ -95,18 +109,19 @@ MatchingEngineBenchmark.benchmarkMatching:benchmarkMatching·p0.9999  sample    
 MatchingEngineBenchmark.benchmarkMatching:benchmarkMatching·p1.00    sample                 0.027                s/op
 ```
 
-JMH configuration: `@Warmup(iterations = 5, time = 5)`, `@Measurement(iterations = 10, time = 5)`, `@Fork(2)`. Run with no CLI overrides — annotations drive the benchmark. Cnt=20 reflects 10 iterations × 2 forks. The 27ms max is a JIT/safepoint outlier at p100; p99.999 remains ~1ms.
+JMH configuration: `@Warmup(iterations = 5, time = 5)`, `@Measurement(iterations = 10, time = 5)`, `@Fork(2)`. Run with no CLI overrides — annotations drive the benchmark, so forks use JVM defaults (Java 21 → **G1GC**). Cnt=20 reflects 10 iterations × 2 forks. JMH `SampleTime` reports order-of-magnitude buckets, so p50–p99 are indistinguishable (~1 µs) at this resolution. The 27 ms p100 is a single outlier — a JIT/safepoint or G1 young-gen pause — while p99.999 stays ~1 ms.
 
 ---
 
-## Macro-Benchmark: Live Binance Replay (3-Minute Run)
+## Macro-Benchmark: Binance Replay (3-Minute Run)
 
-Full 4-stage LMAX Disruptor pipeline processing captured Binance BTC/USDT WebSocket depth data. The producer replays pre-recorded market events at maximum throughput into the ring buffer, exercising Risk Validation, Noop Journaling, Matching, and Settlement under sustained saturation.
+Full 4-stage LMAX Disruptor pipeline processing captured Binance BTC/USDT + ETH/USDT WebSocket depth data. The producer replays pre-recorded market events at maximum throughput into the ring buffer, exercising Risk Validation, Noop Journaling, Matching, and Settlement under continuous saturation. Kafka journaling is stubbed with a `NoopJournaler` (see Limitations).
 
 | Metric | Value |
 |---|---|
+| Duration | 3 minutes (182.4s) |
 | Total events processed | 125,322,426 |
-| Sustained throughput | 687,210 ops/sec |
+| Average throughput | 687,210 ops/sec |
 | Post-warmup throughput | 667,825 ops/sec |
 | Total places / cancels | 93,636,633 / 31,685,793 |
 | Total trades | 61,776 |
@@ -114,40 +129,19 @@ Full 4-stage LMAX Disruptor pipeline processing captured Binance BTC/USDT WebSoc
 | Matching stage p99 | 78.6 ms |
 | Settlement stage p50 | 9.2 ms |
 | Settlement stage p99 | 31.3 ms |
+| Risk stage p50 | 27.1 ms |
 | Risk stage p99 | 86.5 ms |
-| E2E queueing p50 | 65.0 ms |
-| E2E queueing p99 | 158.3 ms |
-| E2E queueing p99.9 | 1,166 ms |
-| Blocked events | 0 |
+| Ring buffer residence (E2E) p50 | 65.0 ms |
+| Ring buffer residence (E2E) p99 | 158.3 ms |
+| Ring buffer residence (E2E) p99.9 | 1,166 ms |
+| Dropped events | 0 |
 | Parse errors | 0 |
-| Order rejection rate | 67.31% |
-| Match rate | 0.07% |
+| Order rejection rate | 67.31% (84.36M ÷ 125.32M total events) |
+| Match rate | 0.07% (61,776 trades ÷ 93.64M placements) |
 
-Note: ~67% of events are risk-rejected due to balance depletion under sustained stress load. The 687K ops/sec figure is **pipeline throughput** (risk + matching + settlement combined). Of those, ~33% pass risk validation and reach the matching engine. The match rate of 0.07% reflects the synthetic price distribution — captured depth deltas are replayed as limit orders with prices distributed across the full snapshot range, so the vast majority rest in the book without crossing the spread.
+Note: 67.31% of all replayed events (84.36M ÷ 125.32M, places + cancels) are risk-rejected due to balance depletion under sustained stress load. The 687K ops/sec figure is **pipeline throughput** (risk + matching + settlement combined). Of events passing risk validation (~33%), most rest in the book without crossing the spread — the 0.07% match rate is trades ÷ placements (61,776 ÷ 93.64M), reflecting the synthetic price distribution of replayed depth deltas.
 
-E2E queueing latency of 65-158ms at p50/p99 is ring buffer residence time under intentional saturation. The producer publishes faster than the pipeline drains, causing events to queue. Per-handler latencies (Risk: 87ms p99, Match: 79ms p99, Settle: 31ms p99) reflect computational cost inclusive of inter-stage queueing delay. Under normal (non-saturated) operation, matching core latency is sub-microsecond as measured by JMH.
-
----
-
-## Macro-Benchmark: Live Binance Replay (10-Minute Stress Test)
-
-Extended saturation run establishing defensible throughput bounds over a sustained 10-minute continuous blast using Binance BTC/USDT and ETH/USDT depth event streams.
-
-| Metric | Value |
-|---|---|
-| Duration | 10.0 minutes |
-| Total events processed | ~412M (extrapolated from 3-min at 687K ops/sec) |
-| Sustained throughput | ~687K ops/sec |
-| Order rejection rate | ~67% |
-| E2E queueing p99 | ~158 ms |
-| Matching stage p99 | ~79 ms |
-| Settlement stage p99 | ~31 ms |
-| Blocked events | 0 |
-| Parse errors | 0 |
-
-Note: The 10-minute numbers above are extrapolated from the verified 3-minute run. The 3-minute run showed stable convergence (407K ops/sec at pass 800+), indicating the throughput is in steady state. A full 10-minute re-run has not been performed with the current FIFO cancel fix and verified account IDs.
-
-E2E queueing latency of ~158ms at p99 is ring buffer residence time under intentional saturation — the producer blocks on `ringBuffer.next()` when the buffer is full, ensuring zero data loss. Under non-saturated load, matching core latency is sub-microsecond (see JMH results above).
+Ring buffer residence of 65–158 ms at p50/p99 is the time an event waits in the buffer under intentional saturation — the producer publishes faster than the pipeline drains, so events queue; the 1,166 ms p99.9 is the rare deep-queue tail when the buffer stays full. Per-handler latencies (Risk 87 ms p99, Match 79 ms p99, Settle 31 ms p99) are computational cost inclusive of inter-stage queueing delay. Percentiles are **not additive** — the p99 of end-to-end residence (158 ms) is not the sum of the per-stage p99s (196 ms). Post-warmup throughput (667,825) is *lower* than the overall average (687,210) because the first ~5 s ran against a still-shallow book with undepleted balances at ~1.37M ops/sec, lifting the average; the post-warmup figure is the representative steady-state rate. Under non-saturated operation, matching core latency is sub-microsecond (see JMH).
 
 ---
 
@@ -155,11 +149,11 @@ E2E queueing latency of ~158ms at p99 is ring buffer residence time under intent
 
 **Ring buffer saturation and E2E latency.** The 158.3ms E2E p99 latency is a direct consequence of intentional ring buffer saturation. The replay benchmark feeds events via `ringBuffer.next()` (blocking), which causes the producer to stall when the buffer is full. The resulting queueing delay accumulates in the `RingBuffer` itself — not in the handlers. This is a deliberate design choice: the system queues rather than drops under extreme backpressure, ensuring zero data loss. Under non-saturated production load, the matching engine processes individual orders in sub-microsecond time (see JMH results).
 
-**Single-writer bottleneck.** The single-writer principle guarantees cache-line isolation and eliminates false sharing, but pipeline throughput is bounded by the slowest handler stage. Under the current risk validation logic (with background balance replenishment every 10 seconds), the system saturates at approximately 407K ops/sec. Horizontal scaling via partitioned order books on separate Disruptor instances would be the path to higher aggregate throughput.
+**Single-writer bottleneck.** The single-writer principle guarantees cache-line isolation and eliminates false sharing, but pipeline throughput is bounded by the slowest handler stage — here the risk-validation logic, which runs under background balance replenishment every 10 seconds. The 3-minute replay averaged ~687K events/sec (667K post-warmup); higher aggregate throughput would come from horizontal scaling via partitioned order books on separate Disruptor instances.
 
 **Kafka journaling overhead.** These benchmark results exclude Kafka — the engine runs with a NoopJournaler. If Kafka journaling is enabled (`CommandBufferJournalerImpl`), throughput degrades to the synchronous `producer.send().get()` round-trip, bounded by network I/O and disk flushing. A production Disruptor would use memory-mapped files (like the original LMAX) or asynchronous journaling, which is outside the scope of this project.
 
-**Garbage collection telemetry.** While the intrusive linked lists eliminate *node allocations* during book traversal, the core is not truly zero-allocation. JMH profiling via `-prof gc` empirically validates that the engine allocates **~576 bytes per operation**. This accounts for the instantiation of `Order` entities, Lombok builders, and `MatchingResult` records per match. The short lifecycle of these objects makes them eligible for rapid ZGC/G1 young-gen collection, allowing the engine to sustain high throughput. Achieving true zero-allocation would require comprehensive object pooling (e.g., using Disruptor pre-allocated event rings for all intermediate domain objects), which was deemed unnecessary given the architectural tradeoffs.
+**Garbage collection telemetry.** While the intrusive linked lists eliminate *node allocations* during book traversal, the core is not zero-allocation. JMH profiling via `-prof gc` measures **~576 bytes per operation** — `Order` entities, Lombok builders, and `MatchingResult` records per match. At 1.7M ops/sec that is ~980 MB/sec, so young-gen collections *do* happen; they simply don't surface in the latency distribution through p99.9 (~10 µs). The isolated JMH core runs on Java 21's default **G1**; the Binance replay runs on **ZGC** (`-XX:+UseZGC`). Both keep these short-lived objects in young-gen. Achieving true zero-allocation would require comprehensive object pooling (e.g., using Disruptor pre-allocated event rings for all intermediate domain objects), which was deemed unnecessary given the architectural tradeoffs.
 
 ---
 
@@ -276,15 +270,17 @@ Exposes REST on port 8900.
 |---|---|
 | Ring buffer pipeline | LMAX Disruptor 4.x |
 | Binary RPC | gRPC + Protobuf |
-| Event sourcing | Apache Kafka |
+| Command journaling | Apache Kafka (`NoopJournaler` in benchmarks) |
 | Application framework | Spring Boot 3 (virtual threads) |
-| Off-heap collections | Agrona `Long2ObjectHashMap` |
+| Primitive-key collections | Agrona `Long2ObjectHashMap` |
 | Latency measurement | HdrHistogram |
 | Metrics | Prometheus + Micrometer + Grafana |
 | Persistence | PostgreSQL (snapshot recovery) |
 | Microbenchmark | JMH (OpenJDK) |
 
 ---
+
+
 
 ## License
 
